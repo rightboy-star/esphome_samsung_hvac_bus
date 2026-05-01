@@ -1012,10 +1012,16 @@ namespace esphome
 
         void NonNasaProtocol::protocol_update(MessageTarget *target)
         {
+            // --- Fallback mode state (persists across calls) ---
+            static uint32_t registration_start_ms = 0;
+            static uint32_t last_reg_attempt_ms = 0;
+            static bool fallback_mode = false;
+
+            const uint32_t now = millis();
+
             // non-blocking keepalive send (scheduled from broadcast request)
             if (non_nasa_keepalive && pending_keepalive_)
             {
-                const uint32_t now = millis();
                 if ((int32_t)(now - pending_keepalive_due_ms_) >= 0)
                 {
                     send_register_controller(target);
@@ -1028,13 +1034,11 @@ namespace esphome
                 pending_keepalive_ = false;
             }
 
-            // Non-NASA scheduled control TX
+            // Non-NASA scheduled control TX (from CmdC6 - normal mode)
             if (pending_control_tx_)
             {
-                const uint32_t now = millis();
                 if ((int32_t)(now - pending_control_tx_due_ms_) >= 0)
                 {
-                    // Only send if indoor is awake; CmdC6 already implies outdoor is awake
                     if (indoor_unit_awake)
                     {
                         send_requests(target);
@@ -1043,44 +1047,68 @@ namespace esphome
                 }
             }
 
-            // If we're not currently registered, keep sending a registration request until it has
-            // been confirmed by the outdoor unit.
-            if (!controller_registered)
+            // --- MODIFIED: Registration with rate-limit and fallback ---
+            if (!controller_registered && !fallback_mode)
             {
-                send_register_controller(target);
+                // Record first attempt time
+                if (registration_start_ms == 0)
+                    registration_start_ms = now;
+
+                // Rate-limit: send registration every 5 seconds (not every 20ms)
+                if (now - last_reg_attempt_ms >= 5000 || last_reg_attempt_ms == 0)
+                {
+                    send_register_controller(target);
+                    last_reg_attempt_ms = now;
+                }
+
+                // After 30 seconds without CmdC6 response, enter fallback mode
+                if (now - registration_start_ms >= 30000)
+                {
+                    LOGW("No CmdC6 response after 30s - entering fallback mode (direct TX)");
+                    fallback_mode = true;
+                }
             }
 
-            // If we have *any* messages in the queue for longer than 15s, assume failure and
-            // remove from queue (the AC or UART connection is likely offline).
-            const uint32_t now = millis();
+            // Queue cleanup: remove stale entries (15s timeout)
             nonnasa_requests.remove_if([&](const NonNasaRequestQueueItem &item)
                                        { return now - item.time > 15000; });
 
-            // If we have any *sent* messages in the queue that haven't received an ack in under 5s,
-            // assume they failed and queue for resend on the next request_control message. Retry at
-            // most 3 times.
+            // Resend logic for sent-but-unacknowledged messages (retry up to 3 times)
             for (auto &item : nonnasa_requests)
             {
                 if (item.time_sent > 0 && item.resend_count < 3 && now - item.time_sent > 4500)
                 {
-                    item.time_sent = 0; // Resend
+                    item.time_sent = 0; // Mark for resend
                     item.resend_count++;
                 }
             }
 
-            // If we have any *unsent* messages in the queue for over 1000ms, it likely means the indoor
-            // and/or outdoor unit has gone to sleep due to inactivity. Send a registration request to
-            // wake the unit up.
-            for (auto &item : nonnasa_requests)
+            // --- MODIFIED: Fallback mode - send directly without CmdC6 ---
+            if (fallback_mode)
             {
-                if (item.time_sent == 0 && now - item.time > 1000 && item.resend_count == 0 && item.retry_count == 0)
+                for (auto &item : nonnasa_requests)
                 {
-                    // Both the outdoor and the indoor unit must be awake before we can send a command
-                    indoor_unit_awake = false;
-                    item.retry_count++;
-                    LOGD("Device is likely sleeping, waking...");
-                    send_register_controller(target);
-                    break;
+                    if (item.time_sent == 0)
+                    {
+                        LOGD("Fallback mode: sending control request directly");
+                        send_requests(target);
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // Original sleeping logic (only when NOT in fallback mode)
+                for (auto &item : nonnasa_requests)
+                {
+                    if (item.time_sent == 0 && now - item.time > 1000 && item.resend_count == 0 && item.retry_count == 0)
+                    {
+                        indoor_unit_awake = false;
+                        item.retry_count++;
+                        LOGD("Device is likely sleeping, waking...");
+                        send_register_controller(target);
+                        break;
+                    }
                 }
             }
         }
