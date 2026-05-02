@@ -1019,8 +1019,23 @@ namespace esphome
 
             const uint32_t now = millis();
 
+            // Check if there are pending control commands in the queue
+            bool has_pending_commands = false;
+            for (const auto &item : nonnasa_requests)
+            {
+                if (item.time_sent == 0)
+                {
+                    has_pending_commands = true;
+                    break;
+                }
+            }
+
+            // --- In fallback mode with pending commands: suppress ALL non-control traffic ---
+            // This frees up the bus for control commands, dramatically reducing response time.
+            bool suppress_non_control = fallback_mode && has_pending_commands;
+
             // non-blocking keepalive send (scheduled from broadcast request)
-            if (non_nasa_keepalive && pending_keepalive_)
+            if (!suppress_non_control && non_nasa_keepalive && pending_keepalive_)
             {
                 if ((int32_t)(now - pending_keepalive_due_ms_) >= 0)
                 {
@@ -1047,21 +1062,18 @@ namespace esphome
                 }
             }
 
-            // --- MODIFIED: Registration with rate-limit and fallback ---
+            // --- Registration with rate-limit and fallback ---
             if (!controller_registered && !fallback_mode)
             {
-                // Record first attempt time
                 if (registration_start_ms == 0)
                     registration_start_ms = now;
 
-                // Rate-limit: send registration every 5 seconds (not every 20ms)
                 if (now - last_reg_attempt_ms >= 5000 || last_reg_attempt_ms == 0)
                 {
                     send_register_controller(target);
                     last_reg_attempt_ms = now;
                 }
 
-                // After 30 seconds without CmdC6 response, enter fallback mode
                 if (now - registration_start_ms >= 30000)
                 {
                     LOGW("No CmdC6 response after 30s - entering fallback mode (direct TX)");
@@ -1069,28 +1081,39 @@ namespace esphome
                 }
             }
 
+            // --- In fallback mode WITHOUT pending commands: periodic registration (every 30s) ---
+            // Much less frequent than before, just to keep minimal bus presence.
+            if (fallback_mode && !has_pending_commands && !controller_registered)
+            {
+                if (now - last_reg_attempt_ms >= 30000)
+                {
+                    send_register_controller(target);
+                    last_reg_attempt_ms = now;
+                }
+            }
+
             // Queue cleanup: remove stale entries (15s timeout)
             nonnasa_requests.remove_if([&](const NonNasaRequestQueueItem &item)
                                        { return now - item.time > 15000; });
 
-            // Resend logic for sent-but-unacknowledged messages (retry up to 3 times)
+            // Resend logic: in fallback mode use shorter timeout (1.5s vs 4.5s)
+            uint32_t resend_timeout = fallback_mode ? 1500 : 4500;
             for (auto &item : nonnasa_requests)
             {
-                if (item.time_sent > 0 && item.resend_count < 3 && now - item.time_sent > 4500)
+                if (item.time_sent > 0 && item.resend_count < 3 && now - item.time_sent > resend_timeout)
                 {
                     item.time_sent = 0; // Mark for resend
                     item.resend_count++;
                 }
             }
 
-            // --- MODIFIED: Fallback mode - send directly without CmdC6 ---
+            // --- Fallback mode - send directly without CmdC6 ---
             if (fallback_mode)
             {
                 for (auto &item : nonnasa_requests)
                 {
                     if (item.time_sent == 0)
                     {
-                        LOGD("Fallback mode: sending control request directly");
                         send_requests(target);
                         break;
                     }
