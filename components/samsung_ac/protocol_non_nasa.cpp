@@ -1094,7 +1094,7 @@ namespace esphome
 
             // Queue cleanup: remove stale entries (15s timeout)
             nonnasa_requests.remove_if([&](const NonNasaRequestQueueItem &item)
-                                       { return now - item.time > 15000; });
+                                       { return now - item.time > 7000; });
 
             // Resend logic: in fallback mode use shorter timeout (1.5s vs 4.5s)
             uint32_t resend_timeout = fallback_mode ? 1500 : 4500;
