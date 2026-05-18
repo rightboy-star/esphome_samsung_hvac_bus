@@ -852,6 +852,9 @@ namespace esphome
                 // If a state update comes through after a control message has been sent, but before it
                 // has been acknowledged, it should be ignored. This prevents the UI status bouncing
                 // between states after a command has been issued.
+                // 추가
+                const uint32_t now = millis();
+                
                 bool pending_control_message = false;
                 for (auto &item : nonnasa_requests)
                 {
