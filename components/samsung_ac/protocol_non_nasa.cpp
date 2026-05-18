@@ -855,7 +855,8 @@ namespace esphome
                 bool pending_control_message = false;
                 for (auto &item : nonnasa_requests)
                 {
-                    if (item.time_sent > 0 && nonpacket_.src == item.request.dst)
+                    if (item.time_sent > 0 && nonpacket_.src == item.request.dst &&
+                        (now - item.time) < 3000)
                     {
                         pending_control_message = true;
                         break;
@@ -1092,7 +1093,7 @@ namespace esphome
                 }
             }
 
-            // Queue cleanup: remove stale entries (15s timeout)
+            // Queue cleanup: remove stale entries (7s timeout)
             nonnasa_requests.remove_if([&](const NonNasaRequestQueueItem &item)
                                        { return now - item.time > 7000; });
 
