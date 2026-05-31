@@ -660,7 +660,18 @@ namespace esphome
                 req.target_temp.set_from_celsius(request.target_temp.value());
 
             if (request.fan_mode)
-                req.fanspeed = fanmode_to_nonnasa_fanspeed(request.fan_mode.value());
+                        {
+                            if (address == "00") {
+                                switch (request.fan_mode.value()) {
+                                    case FanMode::Low: req.fanspeed = (NonNasaFanspeed)4; break;
+                                    case FanMode::Mid: req.fanspeed = (NonNasaFanspeed)5; break;
+                                    case FanMode::High: req.fanspeed = (NonNasaFanspeed)7; break;
+                                    default: req.fanspeed = NonNasaFanspeed::Auto; break;
+                                }
+                            } else {
+                                req.fanspeed = fanmode_to_nonnasa_fanspeed(request.fan_mode.value());
+                            }
+                        }
 
             if (request.alt_mode)
             {
@@ -890,7 +901,18 @@ namespace esphome
                     target->set_mode(nonpacket_.src, nonnasa_mode_to_mode(nonpacket_.command20.mode));
                     // TODO
                     target->set_water_heater_mode(nonpacket_.src, nonnasa_water_heater_mode_to_mode(-0));
-                    target->set_fanmode(nonpacket_.src, nonnasa_fanspeed_to_fanmode(nonpacket_.command20.fanspeed));
+                    if (nonpacket_.src == "00") {
+                                            FanMode fm;
+                                            switch ((uint8_t)nonpacket_.command20.fanspeed) {
+                                                case 4: fm = FanMode::Low; break;
+                                                case 5: fm = FanMode::Mid; break;
+                                                case 7: fm = FanMode::High; break;
+                                                default: fm = FanMode::Auto; break;
+                                            }
+                                            target->set_fanmode(nonpacket_.src, fm);
+                                        } else {
+                                            target->set_fanmode(nonpacket_.src, nonnasa_fanspeed_to_fanmode(nonpacket_.command20.fanspeed));
+                                        }
                     // TODO
                     target->set_altmode(nonpacket_.src, 0);
                     // Cmd20 swing decode: converting wind_direction to vertical/horizontal booleans
