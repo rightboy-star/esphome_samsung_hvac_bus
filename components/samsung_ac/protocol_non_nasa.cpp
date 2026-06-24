@@ -391,10 +391,18 @@ namespace esphome
                 command20.power = data[8] & 0b10000000;
                 command20.pipe_out = Temperature::decode(data[11]);
 
-                if (command20.wind_direction == (NonNasaWindDirection)0)
-                    command20.wind_direction = NonNasaWindDirection::Stop;
+                    if (command20.wind_direction == (NonNasaWindDirection)0)
+                        command20.wind_direction = NonNasaWindDirection::Stop;
 
-                return {DecodeResultType::Processed, 14};
+                    // [TEMP] WindFree analysis - raw 14-byte hex dump for src=01
+                    if (data[1] == 0x01) {
+                        LOGI("Cmd20 RAW src=01: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X  (d8=0x%02X d9=0x%02X d10=0x%02X)",
+                             data[0], data[1], data[2], data[3], data[4], data[5], data[6],
+                             data[7], data[8], data[9], data[10], data[11], data[12], data[13],
+                             data[8], data[9], data[10]);
+                    }
+
+                    return {DecodeResultType::Processed, 14};
 
             case NonNasaCommand::CmdC0:
                 commandC0.outdoor_unit_operation_mode = data[4];
