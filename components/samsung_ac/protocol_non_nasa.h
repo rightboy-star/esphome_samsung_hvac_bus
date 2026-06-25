@@ -70,7 +70,12 @@ namespace esphome
 
             std::string to_string();
         };
-
+    
+        struct NonNasaCommand1D // from indoor units - windfree status
+        {
+            bool windfree = false;
+        };
+    
         struct NonNasaCommandC0 // from outdoor unit
         {
             uint8_t outdoor_unit_operation_mode = 0;
@@ -161,6 +166,7 @@ namespace esphome
 
         enum class NonNasaCommand : uint8_t
         {
+            Cmd1D = 0x1d,
             Cmd20 = 0x20,
             Cmd54 = 0x54,
             Cmd8D = 0x8d,
@@ -186,6 +192,7 @@ namespace esphome
 
             union
             {
+                NonNasaCommand1D command1D;
                 NonNasaCommand20 command20;
                 NonNasaCommandRaw command54; // Control message ack
                 NonNasaCommand8D command8D;
