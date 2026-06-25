@@ -589,6 +589,10 @@ namespace esphome
             data[5] = room_temp.encode();
             data[6] = (target_temp.encode() & 31U) | encode_request_fanspeed(fanspeed);
             data[7] = (uint8_t)encode_request_mode(mode);
+            if (windfree)
+            {
+                data[7] |= 0x20;  // bit 5 = windfree flag (experimental)
+            }
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
             data[8] |= (individual ? 6U : 4U);
             data[9] = (uint8_t)0x21;
@@ -684,7 +688,7 @@ namespace esphome
 
             if (request.alt_mode)
             {
-                LOGW("change altmode is currently not implemented");
+                req.windfree = (request.alt_mode.value() == 9);
             }
 
             if (request.swing_mode)
