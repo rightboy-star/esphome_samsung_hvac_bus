@@ -220,6 +220,7 @@ namespace esphome
             NonNasaMode mode = NonNasaMode::Heat;
             bool power = false;
             NonNasaWindDirection wind_direction = NonNasaWindDirection::Stop;
+            bool windfree = false;
 
             std::vector<uint8_t> encode();
             std::string to_string();
