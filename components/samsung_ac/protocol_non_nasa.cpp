@@ -294,6 +294,11 @@ namespace esphome
             str += "cmd:" + long_to_hex((uint8_t)cmd) + ";";
             switch (cmd)
             {
+            case NonNasaCommand::Cmd1D:
+            {
+                str += "command1D:{windfree:" + std::string(command1D.windfree ? "ON" : "OFF") + "}";
+                break;
+            }
             case NonNasaCommand::Cmd20:
             {
                 str += "command20:{" + command20.to_string() + "}";
@@ -381,6 +386,10 @@ namespace esphome
             cmd = (NonNasaCommand)data[3];
             switch (cmd)
             {
+            case NonNasaCommand::Cmd1D:
+                command1D.windfree = (data[4] & 0x80) != 0;
+                return {DecodeResultType::Processed, 14};
+                    
             case NonNasaCommand::Cmd20:
                 command20.target_temp = Temperature::decode(data[4]);
                 command20.room_temp = Temperature::decode(data[5]);
@@ -393,14 +402,6 @@ namespace esphome
 
                     if (command20.wind_direction == (NonNasaWindDirection)0)
                         command20.wind_direction = NonNasaWindDirection::Stop;
-
-                    // [TEMP] WindFree analysis - raw 14-byte hex dump for src=01
-                    if (data[1] == 0x01) {
-                        LOGI("Cmd20 RAW src=01: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X  (d8=0x%02X d9=0x%02X d10=0x%02X)",
-                             data[0], data[1], data[2], data[3], data[4], data[5], data[6],
-                             data[7], data[8], data[9], data[10], data[11], data[12], data[13],
-                             data[8], data[9], data[10]);
-                    }
 
                     return {DecodeResultType::Processed, 14};
 
@@ -921,8 +922,7 @@ namespace esphome
                                         } else {
                                             target->set_fanmode(nonpacket_.src, nonnasa_fanspeed_to_fanmode(nonpacket_.command20.fanspeed));
                                         }
-                    // TODO
-                    target->set_altmode(nonpacket_.src, 0);
+                    // altmode (windfree) is handled by Cmd1D, not Cmd20
                     // Cmd20 swing decode: converting wind_direction to vertical/horizontal booleans
                     target->set_swing_horizontal(nonpacket_.src,
                                                  (nonpacket_.command20.wind_direction == NonNasaWindDirection::Horizontal) ||
@@ -930,6 +930,25 @@ namespace esphome
                     target->set_swing_vertical(nonpacket_.src,
                                                (nonpacket_.command20.wind_direction == NonNasaWindDirection::Vertical) ||
                                                    (nonpacket_.command20.wind_direction == NonNasaWindDirection::FourWay));
+                }
+            }
+            else if (nonpacket_.cmd == NonNasaCommand::Cmd1D)
+            {
+                // Cmd1D from indoor unit: windfree status in data[4] bit 7
+                static std::map<std::string, bool> last_windfree_state_;
+                bool current = nonpacket_.command1D.windfree;
+
+                auto it = last_windfree_state_.find(nonpacket_.src);
+                if (it == last_windfree_state_.end() || it->second != current)
+                {
+                    last_windfree_state_[nonpacket_.src] = current;
+                    target->set_altmode(nonpacket_.src, current ? 9 : 0);
+                    if (debug_log_messages)
+                    {
+                        LOGI("Cmd1D windfree: src=%s, windfree=%s",
+                             nonpacket_.src.c_str(),
+                             current ? "ON" : "OFF");
+                    }
                 }
             }
             else if (nonpacket_.cmd == NonNasaCommand::CmdC0)
