@@ -591,7 +591,49 @@ namespace esphome
             data[7] = (uint8_t)encode_request_mode(mode);
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
             data[8] |= (individual ? 6U : 4U);
-            data[9] = windfree ? 0xA1 : 0x21;  // bit 7 = windfree flag (experimental #3)
+            data[9] = 0x21;  // 원복 (windfree scan에서 테스트함)
+            // === WINDFREE EXPERIMENTAL SCAN ===
+            if (windfree)
+            {
+                static uint8_t wf_candidate = 0;
+                struct WfTest { uint8_t pos; uint8_t val; const char* desc; };
+                static const WfTest tests[] = {
+                    {10, 0x80, "d10=0x80"},
+                    {10, 0x01, "d10=0x01"},
+                    {10, 0x20, "d10=0x20"},
+                    {11, 0x80, "d11=0x80"},
+                    {11, 0x01, "d11=0x01"},
+                    { 8, 0xF6, "d8=0xF6 (pwr|0x02)"},
+                    { 8, 0xFC, "d8=0xFC (pwr|0x08)"},
+                    { 9, 0x61, "d9=0x61 (|0x40)"},
+                    { 9, 0x31, "d9=0x31 (|0x10)"},
+                    { 9, 0x25, "d9=0x25 (|0x04)"},
+                    { 9, 0x23, "d9=0x23 (|0x02)"},
+                    { 9, 0xA5, "d9=0xA5 (|0x84)"},
+                    { 6, 0xC0, "d6=fan_windfree(0xC0)|temp"},
+                    { 6, 0xE0, "d6=fan_windfree(0xE0)|temp"},
+                    { 4, 0x80, "d4=0x80 retry"},
+                    { 7, 0x21, "d7=mode|0x20 retry"},
+                };
+                constexpr uint8_t NUM_TESTS = sizeof(tests) / sizeof(tests[0]);
+                auto &t = tests[wf_candidate % NUM_TESTS];
+
+                if (t.pos == 6) {
+                    data[6] = (data[6] & 0x1F) | t.val;
+                } else if (t.pos == 8) {
+                    data[8] = t.val;
+                } else {
+                    data[t.pos] = t.val;
+                }
+
+                LOGW("WF_SCAN #%d/%d: %s  [%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X]",
+                     wf_candidate % NUM_TESTS, NUM_TESTS, t.desc,
+                     data[0], data[1], data[2], data[3], data[4], data[5],
+                     data[6], data[7], data[8], data[9], data[10], data[11]);
+
+                wf_candidate++;
+            }
+            // === END WINDFREE SCAN ===
             data[12] = build_checksum(data);
 
             return data;
