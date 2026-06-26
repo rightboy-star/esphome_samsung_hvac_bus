@@ -591,15 +591,7 @@ namespace esphome
             data[7] = (uint8_t)encode_request_mode(mode);
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
             data[8] |= (individual ? 6U : 4U);
-            data[9] = 0x21;  // 원복 (windfree scan에서 테스트함)
-            // === WINDFREE: dual-byte (d4+d7) ===
-            if (windfree)
-            {
-                data[4] |= 0x80;
-                data[7] |= 0x20;
-                LOGW("WF_DUAL: d4=0x%02X d7=0x%02X", data[4], data[7]);
-            }
-            // === END WINDFREE ===
+            data[9] = 0x21;
             data[12] = build_checksum(data);
 
             return data;
@@ -692,7 +684,7 @@ namespace esphome
 
             if (request.alt_mode)
             {
-                req.windfree = (request.alt_mode.value() == 9);
+                LOGW("windfree WRITE is not supported on Non-NASA");
             }
 
             if (request.swing_mode)
