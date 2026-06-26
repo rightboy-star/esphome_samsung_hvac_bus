@@ -592,19 +592,12 @@ namespace esphome
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
             data[8] |= (individual ? 6U : 4U);
             data[9] = 0x21;  // 원복 (windfree scan에서 테스트함)
-            // === WINDFREE VIA CMD1D ===
+            // === WINDFREE: dual-byte (d4+d7) ===
             if (windfree)
             {
-                data[3] = 0x1D;
-                data[4] = 0x80;
-                data[5] = 0x1A;
-                data[6] = 0xDA;
-                data[7] = 0x81;
-                data[8] = 0x02;
-                data[9] = 0x01;
-                data[10] = 0x00;
-                data[11] = 0x01;
-                LOGW("WF_CMD1D: sending 0x1D windfree ON");
+                data[4] |= 0x80;
+                data[7] |= 0x20;
+                LOGW("WF_DUAL: d4=0x%02X d7=0x%02X", data[4], data[7]);
             }
             // === END WINDFREE ===
             data[12] = build_checksum(data);
