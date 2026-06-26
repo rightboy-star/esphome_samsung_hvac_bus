@@ -586,16 +586,12 @@ namespace esphome
             bool individual = false;
 
             data[4] = encode_request_wind_direction(wind_direction);
-            if (windfree)
-            {
-                data[4] |= 0x80;  // bit 7 = windfree flag (experimental #2)
-            }
             data[5] = room_temp.encode();
             data[6] = (target_temp.encode() & 31U) | encode_request_fanspeed(fanspeed);
             data[7] = (uint8_t)encode_request_mode(mode);
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
             data[8] |= (individual ? 6U : 4U);
-            data[9] = (uint8_t)0x21;
+            data[9] = windfree ? 0xA1 : 0x21;  // bit 7 = windfree flag (experimental #3)
             data[12] = build_checksum(data);
 
             return data;
